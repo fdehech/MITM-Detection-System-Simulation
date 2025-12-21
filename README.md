@@ -6,8 +6,8 @@ A containerized simulation of Man-In-The-Middle (MITM) attacks and their detecti
 
 The system consists of three main components running in isolated Docker containers:
 
-1.  **Client**: Generates and sends structured messages to the server via the proxy.
-2.  **Proxy (Attacker)**: Intercepts traffic between the client and server. It can be configured to operate in different "attack modes" (transparent, modify, replay, delay).
+1.  **Client**: Generates and sends structured messages with sequence numbers and timestamps.
+2.  **Proxy (Attacker)**: Intercepts traffic between the client and server. It can be configured to operate in different simulation modes.
 3.  **Server**: Receives messages and applies detection rules to identify potential MITM interference.
 
 ```mermaid
@@ -21,20 +21,20 @@ graph LR
 
 The server implements several security checks to detect anomalies:
 
-*   **Replay & Reordering Detection**: Uses sequence numbers (`SEQ`) to ensure messages are received in the correct order and are not duplicates of previous transmissions.
-*   **Delay Detection**: Compares the message timestamp (`TS`) with the server's current time. If the latency exceeds a threshold (default 2s), a delay attack is flagged.
-*   **Integrity Checks**: Validates the message format. If the proxy modifies the structure or content in an unexpected way, an integrity violation alert is triggered.
+*   **Replay & Reordering Detection**: Uses sequence numbers (`SEQ`) to ensure messages are received in the correct order and are not duplicates.
+*   **Delay Detection**: Compares the message timestamp (`TS`) with the server's current time. If the latency exceeds a threshold (`SERVER_MAX_DELAY`), a delay attack is flagged.
+*   **Integrity Checks**: Validates the message format. If the proxy modifies the structure in an unexpected way, an integrity violation alert is triggered.
 
-## 😈 MITM Attack Modes
+## 😈 MITM Simulation Modes
 
-The proxy's behavior is controlled by the `MODE` environment variable:
+The proxy's behavior is controlled by the `PROXY_MODE` environment variable:
 
 | Mode | Description |
 | :--- | :--- |
 | `transparent` | Forwards data without modification (Normal operation). |
-| `modify` | Alters the payload (e.g., changes "HELLO" to "HACKED"). |
+| `modify` | Alters the payload (e.g., changes "HELLO" to "BONJOUR Manipulé"). |
 | `replay` | Sends the previous message instead of the current one. |
-| `delay` | Introduces a 3-second lag before forwarding the message. |
+| `delay` | Introduces a lag (defined by `PROXY_DELAY_SECONDS`) before forwarding. |
 
 ## 🚀 Getting Started
 
@@ -47,42 +47,50 @@ The proxy's behavior is controlled by the `MODE` environment variable:
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/MITM_Detection_System.git
+    git clone https://github.com/fdehech/MITM_Detection_System.git
     cd MITM_Detection_System
     ```
 
-2.  **Start the simulation**:
+2.  **Configure the environment**:
+    Copy the example environment file and modify it as needed:
+    ```bash
+    cp .env.example .env
+    ```
+
+3.  **Start the simulation**:
     ```bash
     docker-compose up --build
     ```
 
-3.  **Observe the logs**:
-    You will see the interaction between the client, proxy, and server. The server will output `[ALERT]` messages when it detects an attack.
+4.  **Observe the logs**:
+    The server will output `[ALERT]` messages in `CRITICAL` level when it detects an attack.
 
 ### Configuration
 
-To test different attack scenarios, modify the `MODE` variable in the `docker-compose.yml` file:
+All settings are managed through the `.env` file. Key variables include:
 
-```yaml
-proxy:
-  environment:
-    - MODE=modify # Options: transparent, modify, replay, delay
-```
+*   `PROXY_MODE`: Set to `transparent`, `modify`, `replay`, or `delay`.
+*   `PROXY_DELAY_SECONDS`: Duration of the delay for the `delay` mode.
+*   `SERVER_MAX_DELAY`: Threshold for delay detection on the server.
+*   `CLIENT_MESSAGE_INTERVAL`: Frequency of message generation.
 
 ## 📂 Project Structure
 
 ```text
 .
 ├── client/
-│   ├── client.py      # Message generator
+│   ├── client.py          # Message generator (Class-based)
 │   └── Dockerfile
 ├── proxy/
-│   ├── proxy.py       # MITM simulation logic
+│   ├── proxy.py           # MITM simulation logic (Class-based)
 │   └── Dockerfile
 ├── server/
-│   ├── server.py      # Detection engine
+│   ├── server.py          # Detection engine (Class-based)
 │   └── Dockerfile
-└── docker-compose.yml # Orchestration
+├── .env                   # Local configuration (git-ignored)
+├── .env.example           # Template for configuration
+├── .gitignore             # Git exclusion rules
+└── docker-compose.yml     # Container orchestration
 ```
 
 ## 📝 License
