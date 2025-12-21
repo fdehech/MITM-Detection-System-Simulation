@@ -2,6 +2,8 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY attacker.py /app/attacker.py
+COPY proxy.py /app/proxy.py
 
-CMD ["python", "attacker.py"]
+EXPOSE 9000
+
+CMD ["python", "-u", "proxy.py"]

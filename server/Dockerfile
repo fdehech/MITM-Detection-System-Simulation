@@ -4,4 +4,6 @@ WORKDIR /app
 
 COPY server.py /app/server.py
 
-CMD ["python", "server.py"]
+EXPOSE 9001
+
+CMD ["python", "-u", "server.py"]

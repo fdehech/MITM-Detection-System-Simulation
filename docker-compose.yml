@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   server:
     build: ./server
@@ -13,9 +11,9 @@ services:
     build: ./proxy
     container_name: tcp_proxy
     environment:
-      - MODE=transparent   # transparent | modify | replay | delay
+      - MODE=transparent # transparent | modify | replay | delay
     depends_on:
-      - tcp_server
+      - server
     ports:
       - "9000:9000"
     networks:
