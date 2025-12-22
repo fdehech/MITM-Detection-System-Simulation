@@ -10,8 +10,13 @@ from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from scalar_fastapi import get_scalar_api_reference
 
-app = FastAPI(title="MITM Detection System API")
+app = FastAPI(
+    title="MITM Detection System API",
+    docs_url=None,
+    redoc_url=None
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -150,6 +155,13 @@ class ConfigModel(BaseModel):
     detection_enabled: bool = True
 
 # --- API Endpoints ---
+
+@app.get("/docs", include_in_schema=False)
+async def scalar_html():
+    return get_scalar_api_reference(
+        openapi_url=app.openapi_url,
+        title=app.title,
+    )
 
 @app.get("/config")
 async def get_config():
