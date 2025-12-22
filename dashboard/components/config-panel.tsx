@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import type { Config } from "@/lib/api"
 
 interface ConfigPanelProps {
@@ -157,29 +158,94 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting }: 
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
-                    <SelectItem value="transparent">Transparent</SelectItem>
-                    <SelectItem value="modify">Modify</SelectItem>
-                    <SelectItem value="replay">Replay</SelectItem>
-                    <SelectItem value="delay">Delay</SelectItem>
+                    <SelectItem value="transparent">🟢 Transparent</SelectItem>
+                    <SelectItem value="random_delay">⏱️ Random Delay</SelectItem>
+                    <SelectItem value="drop">📉 Drop Packets</SelectItem>
+                    <SelectItem value="reorder">🔀 Reorder Packets</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Delay Duration - Only visible when mode is delay */}
-              {localConfig.proxy_mode === "delay" && (
-                <div className="space-y-2">
-                  <Label htmlFor="delay_duration" className="text-foreground">
-                    Delay Duration (s)
+              {/* Random Delay Mode Controls */}
+              {localConfig.proxy_mode === "random_delay" && (
+                <div className="space-y-4 p-4 rounded-lg bg-secondary/20 border border-border">
+                  <Label className="text-foreground font-medium">Random Delay Range (seconds)</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="delay_min" className="text-sm text-muted-foreground">
+                        Min Delay
+                      </Label>
+                      <Input
+                        id="delay_min"
+                        type="number"
+                        min={0}
+                        max={localConfig.delay_max ?? 10}
+                        step={0.1}
+                        value={localConfig.delay_min ?? 0}
+                        onChange={(e) => updateConfig("delay_min", Number.parseFloat(e.target.value) || 0)}
+                        className="bg-input border-border text-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="delay_max" className="text-sm text-muted-foreground">
+                        Max Delay
+                      </Label>
+                      <Input
+                        id="delay_max"
+                        type="number"
+                        min={localConfig.delay_min ?? 0}
+                        step={0.1}
+                        value={localConfig.delay_max ?? 0}
+                        onChange={(e) => updateConfig("delay_max", Number.parseFloat(e.target.value) || 0)}
+                        className="bg-input border-border text-foreground"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Drop Mode Controls */}
+              {localConfig.proxy_mode === "drop" && (
+                <div className="space-y-4 p-4 rounded-lg bg-secondary/20 border border-border">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-foreground font-medium">Drop Rate</Label>
+                    <span className="text-sm font-mono text-muted-foreground">
+                      {((localConfig.drop_rate ?? 0) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[(localConfig.drop_rate ?? 0) * 100]}
+                    onValueChange={(val) => updateConfig("drop_rate", val[0] / 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Percentage of packets to randomly drop
+                  </p>
+                </div>
+              )}
+
+              {/* Reorder Mode Controls */}
+              {localConfig.proxy_mode === "reorder" && (
+                <div className="space-y-4 p-4 rounded-lg bg-secondary/20 border border-border">
+                  <Label htmlFor="reorder_window" className="text-foreground font-medium">
+                    Reorder Window Size
                   </Label>
                   <Input
-                    id="delay_duration"
+                    id="reorder_window"
                     type="number"
-                    min={0}
-                    step={0.1}
-                    value={localConfig.delay_duration ?? 0}
-                    onChange={(e) => updateConfig("delay_duration", Number.parseFloat(e.target.value) || 0)}
+                    min={2}
+                    max={20}
+                    step={1}
+                    value={localConfig.reorder_window ?? 5}
+                    onChange={(e) => updateConfig("reorder_window", Number.parseInt(e.target.value) || 5)}
                     className="bg-input border-border text-foreground"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Number of packets to buffer before reordering
+                  </p>
                 </div>
               )}
             </>

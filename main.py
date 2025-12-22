@@ -39,11 +39,14 @@ def load_current_env() -> Dict[str, Any]:
     """Load current settings from .env file."""
     settings = {
         "use_proxy": True,
-        "proxy_mode": "transparent",
-        "delay_duration": 3.0,
-        "max_delay": 2.0,
-        "message_interval": 1.0,
-        "payload": "HELLO",
+        "proxy_mode": "random_delay",
+        "delay_min": 2.0,
+        "delay_max": 10.0,
+        "drop_rate": 0.3,
+        "reorder_window": 5,
+        "max_delay": 6.0,
+        "message_interval": 10.0,
+        "payload": "Username=ROOT=, Password=SSHTERMINAL",
         "detection_enabled": True
     }
     
@@ -61,8 +64,17 @@ def load_current_env() -> Dict[str, Any]:
             m = re.search(r"PROXY_MODE=(\w+)", content)
             if m: settings["proxy_mode"] = m.group(1)
             
-            m = re.search(r"PROXY_DELAY_SECONDS=([\d.]+)", content)
-            if m: settings["delay_duration"] = float(m.group(1))
+            m = re.search(r"PROXY_DELAY_MIN=([\d.]+)", content)
+            if m: settings["delay_min"] = float(m.group(1))
+            
+            m = re.search(r"PROXY_DELAY_MAX=([\d.]+)", content)
+            if m: settings["delay_max"] = float(m.group(1))
+            
+            m = re.search(r"PROXY_DROP_RATE=([\d.]+)", content)
+            if m: settings["drop_rate"] = float(m.group(1))
+            
+            m = re.search(r"PROXY_REORDER_WINDOW=(\d+)", content)
+            if m: settings["reorder_window"] = int(m.group(1))
             
             m = re.search(r"SERVER_MAX_DELAY=([\d.]+)", content)
             if m: settings["max_delay"] = float(m.group(1))
@@ -103,8 +115,20 @@ PROXY_LISTEN_HOST=0.0.0.0
 PROXY_LISTEN_PORT=9000
 PROXY_SERVER_HOST=server
 PROXY_SERVER_PORT=9001
+
+# Valid modes: transparent, random_delay, drop, reorder
 PROXY_MODE={config['proxy_mode']}
-PROXY_DELAY_SECONDS={config['delay_duration']}
+
+# Random Delay Mode Settings (seconds)
+PROXY_DELAY_MIN={config['delay_min']}
+PROXY_DELAY_MAX={config['delay_max']}
+
+# Drop Mode Settings (0.0 to 1.0, e.g., 0.3 = 30% drop rate)
+PROXY_DROP_RATE={config['drop_rate']}
+
+# Reorder Mode Settings (buffer size for reordering)
+PROXY_REORDER_WINDOW={config['reorder_window']}
+
 PROXY_BUFFER_SIZE=4096
 
 # ----------------
@@ -147,11 +171,14 @@ async def check_docker() -> bool:
 
 class ConfigModel(BaseModel):
     use_proxy: bool = True
-    proxy_mode: str = "transparent"
-    delay_duration: float = 3.0
-    max_delay: float = 2.0
-    message_interval: float = 1.0
-    payload: str = "HELLO"
+    proxy_mode: str = "random_delay"  # transparent, random_delay, drop, reorder
+    delay_min: float = 2.0
+    delay_max: float = 10.0
+    drop_rate: float = 0.3  # 0.0 to 1.0
+    reorder_window: int = 5
+    max_delay: float = 6.0
+    message_interval: float = 10.0
+    payload: str = "Username=ROOT=, Password=SSHTERMINAL"
     detection_enabled: bool = True
 
 # --- API Endpoints ---
@@ -316,11 +343,14 @@ async def reset_config():
     """Reset configuration to factory defaults."""
     factory_defaults = {
         "use_proxy": True,
-        "proxy_mode": "transparent",
-        "delay_duration": 3.0,
-        "max_delay": 2.0,
-        "message_interval": 1.0,
-        "payload": "HELLO",
+        "proxy_mode": "random_delay",
+        "delay_min": 2.0,
+        "delay_max": 10.0,
+        "drop_rate": 0.3,
+        "reorder_window": 5,
+        "max_delay": 6.0,
+        "message_interval": 10.0,
+        "payload": "Username=ROOT=, Password=SSHTERMINAL",
         "detection_enabled": True
     }
     update_env_file(factory_defaults)

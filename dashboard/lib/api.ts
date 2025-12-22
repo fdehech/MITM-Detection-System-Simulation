@@ -2,8 +2,11 @@ const API_BASE = "http://localhost:8000"
 
 export interface Config {
   use_proxy: boolean
-  proxy_mode: "transparent" | "modify" | "replay" | "delay"
-  delay_duration: number
+  proxy_mode: "transparent" | "random_delay" | "drop" | "reorder"
+  delay_min: number
+  delay_max: number
+  drop_rate: number
+  reorder_window: number
   max_delay: number
   message_interval: number
   payload: string
