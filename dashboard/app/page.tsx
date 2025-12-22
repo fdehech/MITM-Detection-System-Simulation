@@ -161,11 +161,20 @@ export default function Dashboard() {
               onReset={handleReset}
               isSaving={isSaving}
               isResetting={isResetting}
+              showOnly={["client", "server", "proxy"]}
             />
           </div>
 
           {/* Control and Monitoring */}
           <div className="lg:col-span-2 space-y-6">
+            <ConfigPanel
+              config={config ?? null}
+              onSave={handleSaveConfig}
+              onReset={handleReset}
+              isSaving={isSaving}
+              isResetting={isResetting}
+              showOnly={["simulation", "actions"]}
+            />
             <ControlPanel
               running={isRunning}
               onStart={handleStart}

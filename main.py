@@ -6,11 +6,18 @@ import socket
 import time
 import re
 import json
+import logging
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from scalar_fastapi import get_scalar_api_reference, Layout, Theme
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(
     title="MITM Detection System API",
@@ -47,17 +54,17 @@ def load_current_env() -> Dict[str, Any]:
         "max_delay": 6.0,
         "message_interval": 10.0,
         "payload": "Username=ROOT=, Password=SSHTERMINAL",
-        "detection_enabled": True
+        "detection_enabled": True,
+        "simulation_timing": 0.0
     }
-    
+
     if not os.path.exists('.env'):
         return settings
-        
+
     try:
         with open('.env', 'r') as f:
             content = f.read()
             
-            # Check if proxy is enabled (heuristic based on port)
             if "CLIENT_PROXY_PORT=9001" in content:
                 settings["use_proxy"] = False
             
@@ -87,6 +94,9 @@ def load_current_env() -> Dict[str, Any]:
 
             m = re.search(r"SERVER_DETECTION_ENABLED=(\w+)", content)
             if m: settings["detection_enabled"] = m.group(1).lower() == "true"
+
+            m = re.search(r"SIMULATION_TIMING=([\d.]+)", content)
+            if m: settings["simulation_timing"] = float(m.group(1))
     except Exception:
         pass
         
@@ -139,6 +149,11 @@ SERVER_LISTEN_PORT=9001
 SERVER_MAX_DELAY={config['max_delay']}
 SERVER_BUFFER_SIZE=4096
 SERVER_DETECTION_ENABLED={'true' if config.get('detection_enabled', True) else 'false'}
+
+# ----------------
+# Simulation Settings
+# ----------------
+SIMULATION_TIMING={config.get('simulation_timing', 0.0)}
 """
     
     with open('.env', 'w') as f:
@@ -171,15 +186,16 @@ async def check_docker() -> bool:
 
 class ConfigModel(BaseModel):
     use_proxy: bool = True
-    proxy_mode: str = "random_delay"  # transparent, random_delay, drop, reorder
+    proxy_mode: str = "random_delay"
     delay_min: float = 2.0
     delay_max: float = 10.0
-    drop_rate: float = 0.3  # 0.0 to 1.0
+    drop_rate: float = 0.3
     reorder_window: int = 5
     max_delay: float = 6.0
     message_interval: float = 10.0
     payload: str = "Username=ROOT=, Password=SSHTERMINAL"
     detection_enabled: bool = True
+    simulation_timing: float = 0.0
 
 # --- API Endpoints ---
 
@@ -215,6 +231,21 @@ async def post_config(config: ConfigModel):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Track background tasks to prevent garbage collection
+background_tasks = set()
+
+async def auto_stop_simulation(duration: float):
+    """Wait for duration and then stop the simulation."""
+    logging.info(f"Auto-stop timer started for {duration} seconds")
+    await asyncio.sleep(duration)
+    try:
+        logging.info(f"Auto-stop triggered after {duration}s")
+        # Always try to stop to be safe
+        await run_command(["docker-compose", "down"])
+        logging.info("Simulation auto-stopped successfully")
+    except Exception as e:
+        logging.error(f"Failed to auto-stop simulation: {e}")
+
 @app.post("/simulation/start")
 async def start_simulation(build: bool = False):
     """Start the simulation in detached mode."""
@@ -226,7 +257,6 @@ async def start_simulation(build: bool = False):
     conflicts = [p for p in ports_to_check if check_port(p)]
     
     if conflicts:
-        # Attempt cleanup
         try:
             await run_command(["docker-compose", "down"])
             await asyncio.sleep(1)
@@ -242,7 +272,16 @@ async def start_simulation(build: bool = False):
     
     try:
         await run_command(cmd)
-        return {"status": "success", "message": "Simulation started"}
+        
+        # Handle simulation timing (auto-stop)
+        config = load_current_env()
+        timing = config.get("simulation_timing", 0.0)
+        if timing > 0:
+            task = asyncio.create_task(auto_stop_simulation(timing))
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+            
+        return {"status": "success", "message": f"Simulation started{' with auto-stop in ' + str(timing) + 's' if timing > 0 else ''}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start simulation: {str(e)}")
 
@@ -263,17 +302,13 @@ async def get_status():
         
         containers = []
         if stdout:
-            # docker-compose ps --format json can return multiple objects (one per line)
-            # or a single list depending on the version.
             try:
-                # Try parsing as a single JSON list first
                 raw_data = json.loads(stdout)
                 if isinstance(raw_data, list):
                     containers_data = raw_data
                 else:
                     containers_data = [raw_data]
             except json.JSONDecodeError:
-                # Fallback: parse line by line
                 containers_data = []
                 for line in stdout.split('\n'):
                     if line.strip():
@@ -283,12 +318,10 @@ async def get_status():
                             continue
             
             for item in containers_data:
-                # Map docker-compose fields to frontend fields
                 name = item.get("Name") or item.get("Service") or "Unknown"
                 state = item.get("State", "stopped").lower()
                 status = item.get("Status", "Unknown")
                 
-                # Normalize state for frontend
                 if "running" in state or "up" in state:
                     normalized_state = "running"
                 elif "exit" in state or "stop" in state:
@@ -315,8 +348,6 @@ async def get_status():
 async def get_logs(container_name: str, tail: int = 100):
     """Get logs for a specific container."""
     try:
-        # Use docker logs to fetch the last N lines
-        # Note: docker logs sends to both stdout and stderr
         process = await asyncio.create_subprocess_exec(
             "docker", "logs", "--tail", str(tail), container_name,
             stdout=asyncio.subprocess.PIPE,
@@ -327,11 +358,8 @@ async def get_logs(container_name: str, tail: int = 100):
         if process.returncode != 0:
              return {"logs": [f"Error fetching logs: {stderr.decode().strip()}"]}
 
-        # Split into lines and filter empty ones
         lines = [line for line in stdout.decode().split('\n') if line.strip()]
         err_lines = [line for line in stderr.decode().split('\n') if line.strip()]
-        
-        # Combine and return
         all_logs = lines + err_lines
         
         return {"logs": all_logs}
@@ -351,7 +379,8 @@ async def reset_config():
         "max_delay": 6.0,
         "message_interval": 10.0,
         "payload": "Username=ROOT=, Password=SSHTERMINAL",
-        "detection_enabled": True
+        "detection_enabled": True,
+        "simulation_timing": 0.0
     }
     update_env_file(factory_defaults)
     return {"status": "success", "message": "Reset to factory defaults"}

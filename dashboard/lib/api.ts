@@ -11,6 +11,7 @@ export interface Config {
   message_interval: number
   payload: string
   detection_enabled: boolean
+  simulation_timing: number
 }
 
 export interface SimulationStatus {
