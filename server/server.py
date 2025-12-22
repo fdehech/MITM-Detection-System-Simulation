@@ -100,11 +100,16 @@ class DetectionServer:
 
         try:
             message = self._parse_message(raw_message) 
+            
+            # Check if detection is enabled
+            detection_enabled = os.getenv("SERVER_DETECTION_ENABLED", "true").lower() == "true"
 
-            # Algorithme de detection
+            # Algorithme de detection (only if enabled)
+            if detection_enabled:
+                self._detect_replay_attack(message.sequence)
+                self._detect_delay_attack(message.timestamp)
+            
             delay = int(time.time()) - message.timestamp
-            self._detect_replay_attack(message.sequence)
-            self._detect_delay_attack(message.timestamp)
 
             # Log normal message
             self.logger.info(
@@ -182,7 +187,7 @@ def main():
     # Lecture de la configuration des variables d'environnement
     host = os.getenv("SERVER_LISTEN_HOST", "0.0.0.0")
     port = int(os.getenv("SERVER_LISTEN_PORT", "9001"))
-    max_delay = int(os.getenv("SERVER_MAX_DELAY", "2"))
+    max_delay = float(os.getenv("SERVER_MAX_DELAY", "2"))
     buffer_size = int(os.getenv("SERVER_BUFFER_SIZE", "4096"))
 
     # Création et lancement du serveur

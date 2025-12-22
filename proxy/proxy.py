@@ -171,7 +171,7 @@ def main():
     server_host = os.getenv("PROXY_SERVER_HOST", "server")
     server_port = int(os.getenv("PROXY_SERVER_PORT", "9001"))
     mode = os.getenv("PROXY_MODE", "transparent")
-    delay_seconds = int(os.getenv("PROXY_DELAY_SECONDS", "3"))
+    delay_seconds = float(os.getenv("PROXY_DELAY_SECONDS", "3"))
     buffer_size = int(os.getenv("PROXY_BUFFER_SIZE", "4096"))
 
     # Création et lancement du proxy
