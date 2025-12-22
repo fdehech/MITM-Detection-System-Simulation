@@ -38,7 +38,7 @@ graph LR
 
 ## 🛠️ Tech Stack
 
-*   **Backend**: Python, FastAPI, Uvicorn
+*   **Backend**: Python, FastAPI, Scalar (API Docs), Uvicorn
 *   **Frontend**: Next.js, React, Tailwind CSS, Shadcn UI, Recharts, Lucide Icons
 *   **Infrastructure**: Docker, Docker Compose
 *   **Scripting**: Python (Client/Server/Proxy logic)
@@ -107,7 +107,7 @@ docker-compose up --build
 
 ## 📡 API Reference
 
-The backend exposes a Swagger UI at `http://localhost:8000/docs`.
+The backend exposes a modern **Scalar API Reference** at `http://localhost:8000/docs`.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -117,6 +117,7 @@ The backend exposes a Swagger UI at `http://localhost:8000/docs`.
 | `POST` | `/simulation/stop` | Stop and remove containers. |
 | `GET` | `/simulation/status` | Check container health. |
 | `GET` | `/logs/{container}` | Fetch raw logs from a specific container. |
+| `POST` | `/simulation/reset` | Reset configuration to factory defaults. |
 
 ## 📂 Project Structure
 
