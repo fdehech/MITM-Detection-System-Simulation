@@ -27,9 +27,9 @@ The system operates with three main Docker containers managed by a central orche
 
 ```mermaid
 graph LR
-    Client[Client Container] -- "SEQ=1 | TS=... | DATA=HELLO" --> Proxy[Proxy (Attacker)]
-    Proxy -- "Manipulated Traffic" --> Server[Server Container]
-    Server -- "Logs & Alerts" --> Dashboard[Dashboard & API]
+    Client["Client Container"] -- "SEQ=1 | TS=... | DATA=HELLO" --> Proxy["Proxy (Attacker)"]
+    Proxy -- "Manipulated Traffic" --> Server["Server Container"]
+    Server -- "Logs & Alerts" --> Dashboard["Dashboard & API"]
 ```
 
 1.  **Client**: Generates structured heartbeats with sequence numbers and timestamps.
