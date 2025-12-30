@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Settings, RotateCcw, Save, Shield, Server, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,30 +10,24 @@ import { Slider } from "@/components/ui/slider"
 import type { Config } from "@/lib/api"
 
 interface ConfigPanelProps {
-  config: Config | null
-  onSave: (config: Partial<Config>) => Promise<void>
+  localConfig: Partial<Config>
+  onChange: <K extends keyof Config>(key: K, value: Config[K]) => void
+  onSave: () => Promise<void>
   onReset: () => Promise<void>
   isSaving: boolean
   isResetting: boolean
   showOnly?: ("client" | "server" | "proxy" | "simulation" | "actions")[]
 }
 
-export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, showOnly }: ConfigPanelProps) {
-  const [localConfig, setLocalConfig] = useState<Partial<Config>>({})
-
-  useEffect(() => {
-    if (config) {
-      setLocalConfig(config)
-    }
-  }, [config])
-
-  const handleSave = () => {
-    onSave(localConfig)
-  }
-
-  const updateConfig = <K extends keyof Config>(key: K, value: Config[K]) => {
-    setLocalConfig((prev) => ({ ...prev, [key]: value }))
-  }
+export function ConfigPanel({ 
+  localConfig, 
+  onChange, 
+  onSave, 
+  onReset, 
+  isSaving, 
+  isResetting, 
+  showOnly 
+}: ConfigPanelProps) {
 
   return (
     <div className="space-y-4">
@@ -59,7 +52,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                 min={0}
                 step={0.1}
                 value={localConfig.message_interval ?? 0}
-                onChange={(e) => updateConfig("message_interval", Number.parseFloat(e.target.value) || 0)}
+                onChange={(e) => onChange("message_interval", Number.parseFloat(e.target.value) || 0)}
                 className="bg-input border-border text-foreground"
               />
             </div>
@@ -72,7 +65,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                 id="payload"
                 type="text"
                 value={localConfig.payload ?? ""}
-                onChange={(e) => updateConfig("payload", e.target.value)}
+                onChange={(e) => onChange("payload", e.target.value)}
                 placeholder="Enter message payload"
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
@@ -99,7 +92,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
               <Switch
                 id="detection_enabled"
                 checked={localConfig.detection_enabled ?? false}
-                onCheckedChange={(checked) => updateConfig("detection_enabled", checked)}
+                onCheckedChange={(checked) => onChange("detection_enabled", checked)}
               />
             </div>
 
@@ -114,7 +107,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                   min={0}
                   step={0.1}
                   value={localConfig.max_delay ?? 0}
-                  onChange={(e) => updateConfig("max_delay", Number.parseFloat(e.target.value) || 0)}
+                  onChange={(e) => onChange("max_delay", Number.parseFloat(e.target.value) || 0)}
                   className="bg-input border-border text-foreground"
                 />
               </div>
@@ -141,7 +134,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
               <Switch
                 id="use_proxy"
                 checked={localConfig.use_proxy ?? false}
-                onCheckedChange={(checked) => updateConfig("use_proxy", checked)}
+                onCheckedChange={(checked) => onChange("use_proxy", checked)}
               />
             </div>
 
@@ -153,7 +146,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                   </Label>
                   <Select
                     value={localConfig.proxy_mode ?? "transparent"}
-                    onValueChange={(value) => updateConfig("proxy_mode", value as Config["proxy_mode"])}
+                    onValueChange={(value) => onChange("proxy_mode", value as Config["proxy_mode"])}
                   >
                     <SelectTrigger className="bg-input border-border text-foreground">
                       <SelectValue placeholder="Select mode" />
@@ -180,7 +173,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                           max={localConfig.delay_max ?? 10}
                           step={0.1}
                           value={localConfig.delay_min ?? 0}
-                          onChange={(e) => updateConfig("delay_min", Number.parseFloat(e.target.value) || 0)}
+                          onChange={(e) => onChange("delay_min", Number.parseFloat(e.target.value) || 0)}
                           className="bg-input border-border text-foreground"
                         />
                       </div>
@@ -192,7 +185,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                           min={localConfig.delay_min ?? 0}
                           step={0.1}
                           value={localConfig.delay_max ?? 0}
-                          onChange={(e) => updateConfig("delay_max", Number.parseFloat(e.target.value) || 0)}
+                          onChange={(e) => onChange("delay_max", Number.parseFloat(e.target.value) || 0)}
                           className="bg-input border-border text-foreground"
                         />
                       </div>
@@ -210,7 +203,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                     </div>
                     <Slider
                       value={[(localConfig.drop_rate ?? 0) * 100]}
-                      onValueChange={(val) => updateConfig("drop_rate", val[0] / 100)}
+                      onValueChange={(val) => onChange("drop_rate", val[0] / 100)}
                       min={0}
                       max={100}
                       step={5}
@@ -229,7 +222,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                       max={20}
                       step={1}
                       value={localConfig.reorder_window ?? 5}
-                      onChange={(e) => updateConfig("reorder_window", Number.parseInt(e.target.value) || 5)}
+                      onChange={(e) => onChange("reorder_window", Number.parseInt(e.target.value) || 5)}
                       className="bg-input border-border text-foreground"
                     />
                   </div>
@@ -261,7 +254,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
                 min={0}
                 step={1}
                 value={localConfig.simulation_timing ?? 0}
-                onChange={(e) => updateConfig("simulation_timing", Number.parseFloat(e.target.value) || 0)}
+                onChange={(e) => onChange("simulation_timing", Number.parseFloat(e.target.value) || 0)}
                 className="bg-input border-border text-foreground"
                 placeholder="0 = indefinite"
               />
@@ -278,7 +271,7 @@ export function ConfigPanel({ config, onSave, onReset, isSaving, isResetting, sh
         <div className="glass-panel rounded-xl p-6">
           <div className="flex gap-3">
             <Button
-              onClick={handleSave}
+              onClick={onSave}
               disabled={isSaving}
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
             >

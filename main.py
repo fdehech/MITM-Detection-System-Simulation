@@ -231,8 +231,6 @@ async def post_config(config: ConfigModel):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Track background tasks to prevent garbage collection
-background_tasks = set()
 
 async def auto_stop_simulation(duration: float):
     """Wait for duration and then stop the simulation."""
@@ -246,9 +244,14 @@ async def auto_stop_simulation(duration: float):
     except Exception as e:
         logging.error(f"Failed to auto-stop simulation: {e}")
 
+# Global variable to track the current auto-stop task
+current_auto_stop_task: Optional[asyncio.Task] = None
+
 @app.post("/simulation/start")
 async def start_simulation(build: bool = False):
     """Start the simulation in detached mode."""
+    global current_auto_stop_task
+    
     if not await check_docker():
         raise HTTPException(status_code=500, detail="Docker or docker-compose not available")
     
@@ -273,13 +276,16 @@ async def start_simulation(build: bool = False):
     try:
         await run_command(cmd)
         
+        # Cancel any existing auto-stop task
+        if current_auto_stop_task and not current_auto_stop_task.done():
+            current_auto_stop_task.cancel()
+            logging.info("Cancelled previous auto-stop task")
+
         # Handle simulation timing (auto-stop)
         config = load_current_env()
         timing = config.get("simulation_timing", 0.0)
         if timing > 0:
-            task = asyncio.create_task(auto_stop_simulation(timing))
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
+            current_auto_stop_task = asyncio.create_task(auto_stop_simulation(timing))
             
         return {"status": "success", "message": f"Simulation started{' with auto-stop in ' + str(timing) + 's' if timing > 0 else ''}"}
     except Exception as e:

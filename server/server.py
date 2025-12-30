@@ -10,7 +10,7 @@ import os
 
 
 class Message:
-    """Structured message with sequence number, timestamp, and payload."""
+    # Message structuré avec numéro de séquence, timestamp et payload.
     def __init__(self, sequence, timestamp, payload):
         self.sequence = sequence
         self.timestamp = timestamp
@@ -18,30 +18,30 @@ class Message:
 
 
 class DetectionServer:
-    """Server that detects MITM attacks"""
+    # Serveur qui détecte les attaques MITM
     def __init__(self, host, port, max_delay, buffer_size):
         
-        # Initialize attributes
+        # Initialisation des attributs  
         self.host = host 
         self.port = port
         self.max_delay = max_delay
         self.buffer_size = buffer_size
         
-        self.expected_sequence = 1  # Track expected sequence number
+        self.expected_sequence = 1  # Numéro de séquence attendu
         self.server_socket = None
         self.client_socket = None
         self._setup_logging()
 
     def _setup_logging(self):
-        """Configure logging for the server"""
+        # Configuration du logging
         logging.basicConfig(
             level=logging.INFO,
-            format="%(asctime)s - [SERVER] - %(levelname)s - %(message)s"
+            format="%(asctime)s - [SERVER] - %(levelname)s - %(message)s" #Format des Logs
         )
         self.logger = logging.getLogger(__name__)
 
     def _parse_message(self, raw_message):
-        """Parse message into structured format"""
+        # Décomposition du message en format structuré
         parts = raw_message.split("|")
         fields = {}
 
@@ -56,7 +56,9 @@ class DetectionServer:
         )
 
     def _detect_dropped_packets(self, sequence):
-        """Detect dropped packets by checking for sequence number gaps"""
+        
+        # Détection des paquets perdus
+        
         if sequence > self.expected_sequence:
             # Gap detected - packets were dropped
             missing_range = list(range(self.expected_sequence, sequence))
@@ -74,7 +76,7 @@ class DetectionServer:
             return False
 
     def _detect_reorder_attack(self, sequence):
-        """Detect out-of-order packet delivery"""
+        # Détection des paquets reordonnés
         if sequence < self.expected_sequence:
             self.logger.critical(
                 f"[ALERT] OUT-OF-ORDER PACKET: Received SEQ={sequence}, Expected SEQ={self.expected_sequence}"
@@ -96,7 +98,7 @@ class DetectionServer:
         return False
 
     def _detect_integrity_violation(self, raw_message):
-        """Detect message integrity violations"""
+        # Détection des violations d'intégrité (Message qui ne respecte pas le format structuré attendu)
         try:
             self._parse_message(raw_message)
             return False
@@ -107,30 +109,29 @@ class DetectionServer:
             return True
 
     def _process_message(self, raw_message):
-        """Process and analyze incoming message"""
+        # Algorithme de traitement et d'analyse des messages arrivés
         if self._detect_integrity_violation(raw_message):
             return
-
         try:
             message = self._parse_message(raw_message) 
             
-            # Check if detection is enabled
+            # Vérification si la détection est activée
             detection_enabled = os.getenv("SERVER_DETECTION_ENABLED", "true").lower() == "true"
 
-            # Detection algorithms (only if enabled)
+            # Algorithme de détection (seulement si activé)
             if detection_enabled:
-                # Check for reordering first (sequence < expected)
+                # Vérification si le paquet est reordonné
                 self._detect_reorder_attack(message.sequence)
                 
-                # Check for dropped packets (sequence > expected)
+                # Vérification si le paquet est perdu
                 self._detect_dropped_packets(message.sequence)
                 
-                # Check for delay attacks
+                # Vérification si le paquet est retardé
                 self._detect_delay_attack(message.timestamp)
             
             delay = int(time.time()) - message.timestamp
 
-            # Log normal message
+            # Log du message normal
             self.logger.info(
                 f"SEQ={message.sequence} | TS={message.timestamp} | Delay={delay}s | DATA={message.payload}"
             )
@@ -139,7 +140,7 @@ class DetectionServer:
             self.logger.error(f"Error processing message: {e}")
 
     def _handle_client(self, client_socket, address):
-        """Handle client connection and message processing."""
+        # Gestion de la connexion et du traitement des messages
         self.logger.info(f"Connected with {address}")
 
         try:
@@ -149,7 +150,7 @@ class DetectionServer:
                     self.logger.info("Client disconnected")
                     break
 
-                # Decode and split by line to process each message individually
+                # Décodage et séparation des messages
                 raw_data = data.decode("utf-8", errors="replace")
                 messages = raw_data.strip().split("\n")
                 
@@ -164,9 +165,9 @@ class DetectionServer:
             client_socket.close()
 
     def run(self):
-        """Start detection server and listen for connections."""
+        # Démarrage du serveur de détection et écoute des connexions
         try:
-            # Create and configure server socket
+            # Création et configuration du socket serveur
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server_socket.bind((self.host, self.port))
@@ -191,7 +192,7 @@ class DetectionServer:
             self.close()
 
     def close(self):
-        """Close all sockets and cleanup resources."""
+        # Fermeture des sockets et nettoyage des ressources
         if self.client_socket:
             self.client_socket.close()
         if self.server_socket:
@@ -200,15 +201,16 @@ class DetectionServer:
 
 
 def main():
-    """Application entry point."""
+
+    # Point d'entrée de l'application
     
-    # Read configuration from environment variables
+    # Lecture de la configuration des variables d'environnement
     host = os.getenv("SERVER_LISTEN_HOST", "0.0.0.0")
     port = int(os.getenv("SERVER_LISTEN_PORT", "9001"))
     max_delay = float(os.getenv("SERVER_MAX_DELAY", "2"))
     buffer_size = int(os.getenv("SERVER_BUFFER_SIZE", "4096"))
 
-    # Create and run server
+    # Création et démarrage du serveur
     server = DetectionServer(host=host, port=port, max_delay=max_delay, buffer_size=buffer_size)
     server.run()
 

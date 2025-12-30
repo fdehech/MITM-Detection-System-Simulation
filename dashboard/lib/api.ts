@@ -57,11 +57,11 @@ export async function stopSimulation(): Promise<{ message: string }> {
   return res.json()
 }
 
-export async function resetSimulation(): Promise<{ message: string }> {
+export async function resetConfig(): Promise<{ message: string }> {
   const res = await fetch(`${API_BASE}/simulation/reset`, {
     method: "POST",
   })
-  if (!res.ok) throw new Error("Failed to reset simulation")
+  if (!res.ok) throw new Error("Failed to reset configuration")
   return res.json()
 }
 
@@ -71,9 +71,8 @@ export async function getSimulationStatus(): Promise<SimulationStatus> {
   return res.json()
 }
 
-export async function getContainerLogs(containerName: string, tail = 100): Promise<string[]> {
+export async function getLogs(containerName: string, tail = 100): Promise<{ logs: string[] }> {
   const res = await fetch(`${API_BASE}/logs/${containerName}?tail=${tail}`)
   if (!res.ok) throw new Error("Failed to fetch logs")
-  const data = await res.json()
-  return data.logs
+  return res.json()
 }
