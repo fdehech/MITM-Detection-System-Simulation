@@ -70,6 +70,23 @@ Les conteneurs communiquent via un réseau privé virtuel (\texttt{lab\_net}), g
 \section{Implémentation TCP en Python}
 L'implémentation repose sur la bibliothèque standard \texttt{socket} de Python. Le protocole applicatif défini permet de suivre précisément l'état de la communication.
 
+\subsection{Initialisation des Sockets}
+\begin{lstlisting}[language=Python, caption=Connexion Client]
+def connect(self):
+    # Établissement de la connexion au proxy
+    self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Création d'un socket
+    self.socket.connect((self.host, self.port)) # Connexion au proxy
+    self.logger.info(f"Connected to proxy at {self.host}:{self.port}")
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python, caption=Initialisation Serveur]
+# Création et configuration du socket serveur
+self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+self.server_socket.bind((self.host, self.port))
+self.server_socket.listen(1)
+\end{lstlisting}
+
 \subsection{Structure des Messages}
 Chaque message envoyé par le client respecte un format strict facilitant l'analyse :
 \begin{verbatim}
@@ -108,6 +125,39 @@ def _parse_message(self, raw_message):
 
 \section{Simulation MITM via Proxy}
 Le composant central de la simulation est le proxy (\texttt{proxy.py}), qui agit comme un relais transparent ou malveillant. Il utilise le multi-threading pour gérer les communications bidirectionnelles (Client $\leftrightarrow$ Serveur).
+
+\subsection{Logique de Transfert (Forwarding)}
+Le cœur du proxy réside dans sa capacité à relayer le trafic tout en permettant l'injection d'anomalies.
+\begin{lstlisting}[language=Python, caption=Boucle de transfert du Proxy]
+def _forward(self, source, destination, direction):
+    """Forward data from source to destination with optional manipulation."""
+    # Create a local buffer for this direction if in reorder mode
+    buffer = deque(maxlen=self.reorder_window) if self.mode == AttackMode.REORDER else None
+    
+    try:
+        while True:
+            data = source.recv(self.buffer_size)
+            if not data:
+                break
+            
+            # Process data according to attack mode
+            processed = self._process_data(data, buffer)
+            
+            # If processed is None, packet is dropped or buffered
+            if processed is not None:
+                destination.sendall(processed)
+                self.logger.info(f"{direction}: forwarded {len(processed)} bytes")
+    except Exception as e:
+        self.logger.info(f"{direction}: stopped ({e})")
+    finally:
+        # Flush reorder buffer if in reorder mode
+        if self.mode == AttackMode.REORDER and buffer:
+            while buffer:
+                try:
+                    destination.sendall(buffer.popleft())
+                except:
+                    pass
+\end{lstlisting}
 
 \subsection{Modes d'Attaque}
 Le proxy implémente plusieurs comportements malveillants configurables :
@@ -148,8 +198,47 @@ Paramètres clés :
     \item \texttt{SERVER\_MAX\_DELAY} : Seuil de tolérance pour la détection de latence.
 \end{itemize}
 
+\begin{lstlisting}[caption=Exemple de fichier .env]
+PROXY_MODE=random_delay
+PROXY_DELAY_MIN=2.0
+PROXY_DELAY_MAX=5.0
+PROXY_DROP_RATE=0.3
+SERVER_MAX_DELAY=3.0
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python, caption=Chargement de la configuration (Proxy)]
+# Lecture de la configuration des variables d'environnement
+proxy_host = os.getenv("PROXY_LISTEN_HOST", "0.0.0.0")
+proxy_port = int(os.getenv("PROXY_LISTEN_PORT", "9000"))
+server_host = os.getenv("PROXY_SERVER_HOST", "server")
+server_port = int(os.getenv("PROXY_SERVER_PORT", "9001"))
+mode = os.getenv("PROXY_MODE", "transparent")
+\end{lstlisting}
+
 \section{Logique de Détection et Alertes}
 Le serveur implémente trois mécanismes principaux de détection basés sur l'analyse des métadonnées du protocole.
+
+\begin{lstlisting}[language=Python, caption=Orchestration de la détection]
+def _process_message(self, raw_message):
+    """ Algorithme de traitement et d'analyse des messages arrivés"""
+    if self._detect_integrity_violation(raw_message):
+        return
+    try:
+        message = self._parse_message(raw_message) 
+        
+        # Algorithme de détection (seulement si activé)
+        if os.getenv("SERVER_DETECTION_ENABLED", "true").lower() == "true":
+            self._detect_reorder_attack(message.sequence)
+            self._detect_dropped_packets(message.sequence)
+            self._detect_delay_attack(message.timestamp)
+        
+        delay = int(time.time()) - message.timestamp
+        self.logger.info(
+            f"SEQ={message.sequence} | TS={message.timestamp} | Delay={delay}s | DATA={message.payload}"
+        )
+    except Exception as e:
+        self.logger.error(f"Error processing message: {e}")
+\end{lstlisting}
 
 \subsection{Détection de Latence (Delay Attack)}
 Le serveur compare le timestamp d'envoi (\texttt{TS}) avec l'heure de réception. Si la différence excède \texttt{SERVER\_MAX\_DELAY}, une alerte est levée.
@@ -164,13 +253,31 @@ def _detect_delay_attack(self, timestamp):
 
 \subsection{Détection de Perte de Paquets (Drop Attack)}
 Le serveur surveille la continuité des numéros de séquence (\texttt{SEQ}). Un saut dans la numérotation indique une perte de paquet.
-\begin{lstlisting}[language=Python, caption=Détection de paquets manquants]
-if sequence > self.expected_sequence:
-    self.logger.critical(f"[ALERT] DROPPED PACKETS DETECTED")
+\begin{lstlisting}[language=Python, caption=Détection des paquets perdus]
+def _detect_dropped_packets(self, sequence):
+    """ Détection des paquets perdus """
+    if sequence > self.expected_sequence:
+        # Gap detected - packets were dropped
+        missing_range = list(range(self.expected_sequence, sequence))
+        self.logger.critical(
+            f"[ALERT] DROPPED PACKETS DETECTED: Missing sequence numbers {missing_range}"
+        )
+        self.expected_sequence = sequence + 1
+        return True
 \end{lstlisting}
 
 \subsection{Détection de Désordre (Reorder Attack)}
 Si un numéro de séquence reçu est inférieur au numéro attendu, cela signifie que les paquets sont arrivés dans le désordre.
+\begin{lstlisting}[language=Python, caption=Détection des paquets réordonnés]
+def _detect_reorder_attack(self, sequence):
+    """ Détection des paquets reordonnés """
+    if sequence < self.expected_sequence:
+        self.logger.critical(
+            f"[ALERT] OUT-OF-ORDER PACKET: Received SEQ={sequence}, Expected SEQ={self.expected_sequence}"
+        )
+        return True
+    return False
+\end{lstlisting}
 
 \section{Limitations et Perspectives}
 Bien que fonctionnel, ce système présente certaines limitations :
