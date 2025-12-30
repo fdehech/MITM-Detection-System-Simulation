@@ -10,7 +10,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "MITM Detection System",
   description: "Control panel for Man-In-The-Middle attack detection system",
-  generator: "v0.app",
 }
 
 export const viewport: Viewport = {
